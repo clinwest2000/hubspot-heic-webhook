@@ -1,0 +1,78 @@
+from flask import Flask, request, jsonify
+import requests
+from cloudconvert_upload import convert_heic_to_jpg_cloudconvert, upload_file_to_hubspot
+import os
+
+import os
+
+HUBSPOT_API_KEY = os.getenv("HUBSPOT_API_KEY")
+CLOUDCONVERT_API_KEY = os.getenv("CLOUDCONVERT_API_KEY")
+
+app = Flask(__name__)
+
+API_BASE = 'https://api.hubapi.com'
+
+HEADERS = {
+    'Authorization': f'Bearer {HUBSPOT_API_KEY}',
+    'Content-Type': 'application/json'
+}
+
+def get_note_by_id(note_id):
+    url = f"{API_BASE}/crm/v3/objects/notes/{note_id}"
+    params = {"properties": "hs_attachment_ids", "associations": "contact,deal,company"}
+    response = requests.get(url, headers=HEADERS, params=params)
+    response.raise_for_status()
+    return response.json()
+
+def get_file_metadata(file_id):
+    url = f"{API_BASE}/files/v3/files/{file_id}"
+    res = requests.get(url, headers=HEADERS)
+    res.raise_for_status()
+    return res.json()
+
+def get_download_url_legacy(file_id):
+    url = f"{API_BASE}/filemanager/api/v2/files/{file_id}"
+    res = requests.get(url, headers=HEADERS)
+    res.raise_for_status()
+    meta = res.json()
+    return meta.get("url")
+
+@app.route("/hubspot-webhook", methods=["POST"])
+def handle_note_created():
+    data = request.json
+
+    for event in data:
+        note_id = event.get("objectId")
+        if not note_id:
+            continue
+
+        print(f"📩 Received webhook for Note ID: {note_id}")
+
+        try:
+            note = get_note_by_id(note_id)
+            attachment_ids = note.get("properties", {}).get("hs_attachment_ids", "")
+            if not attachment_ids:
+                print("No attachments found.")
+                continue
+
+            for file_id in attachment_ids.split(';'):
+                file_id = file_id.strip()
+                metadata = get_file_metadata(file_id)
+                filename = metadata.get('name', '').lower()
+                mime_type = metadata.get("mimeType", "")
+
+                is_heic = filename.endswith('.heic') or mime_type in ['image/heic', 'image/heif'] or ('.' not in filename and len(filename) == 36)
+
+                if not is_heic:
+                    continue
+
+                file_url = get_download_url_legacy(file_id)
+                print(f"📝 Converting {filename} from {file_url}")
+                converted_file, new_file_name = convert_heic_to_jpg_cloudconvert(file_url, filename)
+                upload_result = upload_file_to_hubspot(converted_file, new_file_name)
+                print(f"✅ Uploaded JPG: {upload_result['url']}")
+
+        except Exception as e:
+            print(f"❌ Error processing note {note_id}: {str(e)}")
+
+    return jsonify({"status": "ok"})
