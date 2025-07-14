@@ -39,16 +39,52 @@ def get_download_url_legacy(file_id):
 
 @app.route("/hubspot-webhook", methods=["POST"])
 def handle_note_created():
-    print("🔥 /hubspot-webhook HIT", flush=True)
+    print("🔥 /hubspot-webhook was hit!", flush=True)
+    print("📦 Raw payload:", request.data, flush=True)
+    print("📦 Parsed JSON:", request.get_json(silent=True), flush=True)
 
-    try:
-        print("📦 Raw body:", request.data, flush=True)
-        json_data = request.get_json(force=True)
-        print("📦 Parsed JSON:", json_data, flush=True)
-    except Exception as e:
-        print("❌ Failed to parse JSON:", str(e), flush=True)
+    data = request.get_json(silent=True) or []
+
+    for event in data:
+        note_id = event.get("objectId")
+        if not note_id:
+            continue
+
+        print(f"📩 Received webhook for Note ID: {note_id}", flush=True)
+
+        try:
+            note = get_note_by_id(note_id)
+            attachment_ids = note.get("properties", {}).get("hs_attachment_ids", "")
+            if not attachment_ids:
+                print("No attachments found.", flush=True)
+                continue
+
+            for file_id in attachment_ids.split(';'):
+                file_id = file_id.strip()
+                metadata = get_file_metadata(file_id)
+                filename = metadata.get('name', '').lower()
+                mime_type = metadata.get("mimeType", "")
+
+                is_heic = (
+                    filename.endswith('.heic')
+                    or mime_type in ['image/heic', 'image/heif']
+                    or ('.' not in filename and len(filename) == 36)
+                )
+
+                if not is_heic:
+                    continue
+
+                file_url = get_download_url_legacy(file_id)
+                print(f"📝 Converting {filename} from {file_url}", flush=True)
+                converted_file, new_file_name = convert_heic_to_jpg_cloudconvert(file_url, filename)
+                upload_result = upload_file_to_hubspot(converted_file, new_file_name)
+                print(f"✅ Uploaded JPG: {upload_result['url']}", flush=True)
+
+        except Exception as e:
+            print(f"❌ Error processing note {note_id}: {str(e)}", flush=True)
 
     return jsonify({"status": "ok"})
+
 
 
 if __name__ == "__main__":
