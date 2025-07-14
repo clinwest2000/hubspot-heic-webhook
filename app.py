@@ -30,12 +30,19 @@ def get_file_metadata(file_id):
     res.raise_for_status()
     return res.json()
 
-def get_download_url_legacy(file_id):
-    url = f"{API_BASE}/filemanager/api/v2/files/{file_id}"
-    res = requests.get(url, headers=HEADERS)
+def get_download_url(file_id):
+    """
+    Returns a signed, public URL for any HubSpot file (even note attachments).
+    """
+    url = f"{API_BASE}/files/v3/files/{file_id}/url"
+    headers = {
+        'Authorization': f'Bearer {HUBSPOT_API_KEY}',
+        'Content-Type': 'application/json'
+    }
+    res = requests.post(url, headers=headers)
     res.raise_for_status()
-    meta = res.json()
-    return meta.get("url")
+    return res.json().get("url")
+
 
 @app.route("/hubspot-webhook", methods=["POST"])
 def handle_note_created():
@@ -74,7 +81,7 @@ def handle_note_created():
                 if not is_heic:
                     continue
 
-                file_url = get_download_url_legacy(file_id)
+                file_url = get_download_url(file_id)
                 print(f"📝 Converting {filename} from {file_url}", flush=True)
                 converted_file, new_file_name = convert_heic_to_jpg_cloudconvert(file_url, filename)
                 upload_result = upload_file_to_hubspot(converted_file, new_file_name)
