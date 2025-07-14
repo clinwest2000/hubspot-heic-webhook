@@ -39,9 +39,9 @@ def get_download_url_legacy(file_id):
 
 @app.route("/hubspot-webhook", methods=["POST"])
 def handle_note_created():
-    print("🔥 /hubspot-webhook was hit!")
-    print("📦 Raw payload:", request.data)
-    print("📦 Parsed JSON:", request.get_json(silent=True))
+    print("🔥 /hubspot-webhook was hit!", flush=True)
+    print("📦 Raw payload:", request.data, flush=True)
+    print("📦 Parsed JSON:", request.get_json(silent=True), flush=True)
 
     data = request.get_json(silent=True) or []
 
@@ -50,13 +50,13 @@ def handle_note_created():
         if not note_id:
             continue
 
-        print(f"📩 Received webhook for Note ID: {note_id}")
+        print(f"📩 Received webhook for Note ID: {note_id}"), flush=True
 
         try:
             note = get_note_by_id(note_id)
             attachment_ids = note.get("properties", {}).get("hs_attachment_ids", "")
             if not attachment_ids:
-                print("No attachments found.")
+                print("No attachments found.", flush=True)
                 continue
 
             for file_id in attachment_ids.split(';'):
