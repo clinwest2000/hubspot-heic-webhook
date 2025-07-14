@@ -39,7 +39,11 @@ def get_download_url_legacy(file_id):
 
 @app.route("/hubspot-webhook", methods=["POST"])
 def handle_note_created():
-    data = request.json
+    print("🔥 /hubspot-webhook was hit!")
+    print("📦 Raw payload:", request.data)
+    print("📦 Parsed JSON:", request.get_json(silent=True))
+
+    data = request.get_json(silent=True) or []
 
     for event in data:
         note_id = event.get("objectId")
@@ -80,4 +84,5 @@ def handle_note_created():
 if __name__ == "__main__":
     import os
     port = int(os.environ.get("PORT", 5000))
+    print(f"🛠 Flask is starting on port: {port}")
     app.run(host="0.0.0.0", port=port)
