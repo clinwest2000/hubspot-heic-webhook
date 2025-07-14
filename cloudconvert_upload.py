@@ -15,7 +15,8 @@ def convert_heic_to_jpg_cloudconvert(file_url, file_name):
     print(f"Converting {file_name} via CloudConvert...")
 
     # STEP 1: Download file WITHOUT authorization (HubSpot URL is already signed)
-    response = requests.get(file_url)
+    headers = {'Authorization': f'Bearer {HUBSPOT_API_KEY}'}
+    response = requests.get(file_url, headers=headers)
     response.raise_for_status()
     file_data = response.content
 
