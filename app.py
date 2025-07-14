@@ -32,16 +32,28 @@ def get_file_metadata(file_id):
 
 def get_download_url(file_id):
     """
-    Returns a signed, public URL for any HubSpot file (even note attachments).
+    Try the Files API v3 signed-URL endpoint first; if that 404s (note-attachments live
+    only in legacy File Manager), fall back to the v2 File Manager API.
     """
-    url = f"{API_BASE}/files/v3/files/{file_id}/url"
+    # 1) Try v3 signed URL
+    v3_url = f"{API_BASE}/files/v3/files/{file_id}/url"
     headers = {
         'Authorization': f'Bearer {HUBSPOT_API_KEY}',
         'Content-Type': 'application/json'
     }
-    res = requests.post(url, headers=headers)
-    res.raise_for_status()
-    return res.json().get("url")
+    try:
+        res = requests.post(v3_url, headers=headers)
+        res.raise_for_status()
+        return res.json().get("url")
+    except requests.exceptions.HTTPError as e:
+        if e.response.status_code != 404:
+            raise
+        # 2) Fallback to legacy File Manager v2
+        legacy_url = f"{API_BASE}/filemanager/api/v2/files/{file_id}"
+        res2 = requests.get(legacy_url, headers=headers)
+        res2.raise_for_status()
+        return res2.json().get("url")
+
 
 
 @app.route("/hubspot-webhook", methods=["POST"])
